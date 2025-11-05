@@ -1,11 +1,12 @@
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, ClipboardList, AlertCircle, TrendingUp } from "lucide-react";
 
 const CEODashboard = () => {
   return (
-    <div className="min-h-screen bg-gradient-dark p-6">
-      <div className="max-w-7xl mx-auto">
+    <DashboardLayout>
+      <div>
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2 bg-gradient-gold bg-clip-text text-transparent">
@@ -111,7 +112,7 @@ const CEODashboard = () => {
           </Card>
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   );
 };
 

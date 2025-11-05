@@ -1,10 +1,23 @@
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Building2, Users, BarChart3, Shield } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
+
+  useEffect(() => {
+    if (user && profile?.approved) {
+      const dashboardPath = 
+        profile.role === "CEO" ? "/ceo-dashboard" :
+        profile.role === "Manager" ? "/manager-dashboard" :
+        "/employee-dashboard";
+      navigate(dashboardPath);
+    }
+  }, [user, profile, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-dark">
@@ -36,7 +49,7 @@ const Index = () => {
           <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-20">
             <Card 
               className="bg-gradient-card border-border/50 p-8 hover:shadow-gold transition-all duration-300 cursor-pointer group"
-              onClick={() => navigate('/create-organization')}
+              onClick={() => navigate('/auth?action=create')}
             >
               <div className="text-center">
                 <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center group-hover:bg-primary/20 transition-colors">
@@ -54,7 +67,7 @@ const Index = () => {
 
             <Card 
               className="bg-gradient-card border-border/50 p-8 hover:shadow-gold transition-all duration-300 cursor-pointer group"
-              onClick={() => navigate('/join-organization')}
+              onClick={() => navigate('/auth?action=join')}
             >
               <div className="text-center">
                 <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center group-hover:bg-primary/20 transition-colors">
