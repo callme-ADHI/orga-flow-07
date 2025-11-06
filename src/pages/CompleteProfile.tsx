@@ -1,164 +1,110 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { UserCircle, Upload } from "lucide-react";
-import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
+import bcrypt from "bcryptjs";
 
 export default function CompleteProfile() {
-  const navigate = useNavigate();
   const { user, refreshProfile } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [resumeFile, setResumeFile] = useState<File | null>(null);
+
   const [formData, setFormData] = useState({
     name: "",
-    additionalInfo: "",
+    role: "Employee" as "CEO" | "Manager" | "Employee",
+    orgName: "",
+    orgPassword: "",
+    existingOrgId: "",
+    existingOrgPassword: "",
+    rank: "",
+    resumeUrl: "",
   });
-
-  useEffect(() => {
-    if (!user) {
-      navigate("/auth");
-    }
-  }, [user, navigate]);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Check file type (PDF or images)
-      const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-      if (!validTypes.includes(file.type)) {
-        toast.error("Please upload a PDF or image file");
-        return;
-      }
-      setResumeFile(file);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.name) {
-      toast.error("Please enter your name");
-      return;
-    }
-
-    if (!resumeFile) {
-      toast.error("Please upload your resume");
-      return;
-    }
-
-    const orgData = sessionStorage.getItem("pendingOrg");
-    if (!orgData) {
-      toast.error("Organization data missing");
-      navigate("/auth");
-      return;
-    }
-
-    const { orgName, orgPassword, action } = JSON.parse(orgData);
+    if (!user) return;
 
     setLoading(true);
-
     try {
-      const bcrypt = await import("bcryptjs");
-      const hashedPassword = await bcrypt.hash(orgPassword, 10);
+      let orgId = null;
 
-      let orgId: string;
-
-      if (action === "create") {
-        // Create organization
-        const { data: newOrg, error: orgError } = await supabase
+      if (formData.role === "CEO") {
+        // CEO creates organization - no resume needed
+        const hashedPassword = await bcrypt.hash(formData.orgPassword, 10);
+        const { data: org, error: orgError } = await supabase
           .from("organizations")
           .insert({
-            org_name: orgName,
+            org_name: formData.orgName,
             org_password: hashedPassword,
-            created_by: user?.id,
+            created_by: user.id,
           })
           .select()
           .single();
 
-        if (orgError) {
-          throw orgError;
-        }
-
-        orgId = newOrg.id;
+        if (orgError) throw orgError;
+        orgId = org.id;
       } else {
         // Join existing organization
-        const { data: existingOrg, error: orgError } = await supabase
+        const { data: org, error: orgError } = await supabase
           .from("organizations")
           .select("*")
-          .eq("org_name", orgName)
+          .eq("id", formData.existingOrgId)
           .single();
 
-        if (orgError || !existingOrg) {
-          toast.error("Organization not found");
-          setLoading(false);
-          return;
-        }
+        if (orgError) throw new Error("Organization not found");
 
-        // Verify password
-        const passwordMatch = await bcrypt.compare(orgPassword, existingOrg.org_password);
-        if (!passwordMatch) {
-          toast.error("Incorrect password");
-          setLoading(false);
-          return;
-        }
+        const passwordMatch = await bcrypt.compare(
+          formData.existingOrgPassword,
+          org.org_password
+        );
 
-        orgId = existingOrg.id;
+        if (!passwordMatch) throw new Error("Invalid organization password");
+        orgId = org.id;
       }
 
-      // Upload resume
-      const fileExt = resumeFile.name.split('.').pop();
-      const fileName = `${user?.id}/${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from("resumes")
-        .upload(fileName, resumeFile);
+      // Create profile - CEO is auto-approved by trigger
+      const { error: profileError } = await supabase.from("profiles").insert({
+        user_id: user.id,
+        name: formData.name,
+        email: user.email!,
+        role: formData.role,
+        org_id: orgId,
+        rank: formData.rank || null,
+        resume_url: formData.resumeUrl || null,
+      });
 
-      if (uploadError) {
-        throw uploadError;
-      }
+      if (profileError) throw profileError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from("resumes")
-        .getPublicUrl(fileName);
-
-      // Create profile
-      const role = action === "create" ? "CEO" : "Employee";
-      
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert({
-          user_id: user?.id,
-          org_id: orgId,
-          name: formData.name,
-          email: user?.email || "",
-          role,
-          approved: action === "create", // Auto-approve CEO
-          resume_url: publicUrl,
-        });
-
-      if (profileError) {
-        throw profileError;
-      }
-
-      sessionStorage.removeItem("pendingOrg");
       await refreshProfile();
 
-      if (action === "create") {
-        toast.success("Organization created successfully!");
+      toast({
+        title: "Profile created successfully!",
+        description:
+          formData.role === "CEO"
+            ? "Welcome to your organization!"
+            : "Waiting for approval from your organization.",
+      });
+
+      // CEO goes directly to dashboard, others wait for approval
+      if (formData.role === "CEO") {
         navigate("/ceo-dashboard");
       } else {
-        toast.success("Profile submitted for approval!");
         navigate("/pending-approval");
       }
     } catch (error: any) {
-      console.error("Profile completion error:", error);
-      toast.error(error.message || "Failed to complete profile");
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -166,70 +112,159 @@ export default function CompleteProfile() {
 
   return (
     <div className="min-h-screen bg-gradient-dark flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
-        <Card className="bg-gradient-card border-border/50 p-8 shadow-elevated">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-gold rounded-xl flex items-center justify-center shadow-gold">
-              <UserCircle className="w-8 h-8 text-primary-foreground" />
-            </div>
-            <h1 className="text-3xl font-bold mb-2">Complete Your Profile</h1>
-            <p className="text-muted-foreground">
-              Provide your details to proceed
-            </p>
+      <Card className="bg-gradient-card border-border/50 p-8 shadow-elevated max-w-2xl w-full">
+        <h1 className="text-3xl font-bold mb-6 bg-gradient-gold bg-clip-text text-transparent">
+          Complete Your Profile
+        </h1>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Name */}
+          <div>
+            <Label htmlFor="name">Full Name</Label>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+              required
+              className="mt-1"
+            />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name *</Label>
-              <Input
-                id="name"
-                placeholder="Enter your full name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="bg-background/50 border-border/50"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="additionalInfo">Additional Information (Optional)</Label>
-              <Textarea
-                id="additionalInfo"
-                placeholder="Tell us about yourself"
-                value={formData.additionalInfo}
-                onChange={(e) => setFormData({ ...formData, additionalInfo: e.target.value })}
-                className="bg-background/50 border-border/50 min-h-[100px]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="resume">Upload Resume (PDF or Image) *</Label>
-              <div className="relative">
-                <Input
-                  id="resume"
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={handleFileChange}
-                  className="bg-background/50 border-border/50 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                />
-                {resumeFile && (
-                  <p className="mt-2 text-sm text-muted-foreground flex items-center gap-2">
-                    <Upload className="w-4 h-4" />
-                    {resumeFile.name}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <Button 
-              type="submit" 
-              className="w-full bg-gradient-gold text-primary-foreground font-semibold hover:shadow-gold"
-              disabled={loading}
+          {/* Role Selection */}
+          <div>
+            <Label>Select Your Role</Label>
+            <RadioGroup
+              value={formData.role}
+              onValueChange={(value) =>
+                setFormData({
+                  ...formData,
+                  role: value as "CEO" | "Manager" | "Employee",
+                })
+              }
+              className="mt-2"
             >
-              {loading ? "Submitting..." : "Submit Profile"}
-            </Button>
-          </form>
-        </Card>
-      </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="CEO" id="ceo" />
+                <Label htmlFor="ceo" className="cursor-pointer">
+                  CEO (Create Organization)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="Manager" id="manager" />
+                <Label htmlFor="manager" className="cursor-pointer">
+                  Manager (Join Organization)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="Employee" id="employee" />
+                <Label htmlFor="employee" className="cursor-pointer">
+                  Employee (Join Organization)
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          {/* CEO: Create Organization - No resume needed */}
+          {formData.role === "CEO" && (
+            <>
+              <div>
+                <Label htmlFor="orgName">Organization Name</Label>
+                <Input
+                  id="orgName"
+                  value={formData.orgName}
+                  onChange={(e) =>
+                    setFormData({ ...formData, orgName: e.target.value })
+                  }
+                  required
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="orgPassword">Organization Password</Label>
+                <Input
+                  id="orgPassword"
+                  type="password"
+                  value={formData.orgPassword}
+                  onChange={(e) =>
+                    setFormData({ ...formData, orgPassword: e.target.value })
+                  }
+                  required
+                  className="mt-1"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Manager/Employee: Join Organization */}
+          {formData.role !== "CEO" && (
+            <>
+              <div>
+                <Label htmlFor="existingOrgId">Organization ID</Label>
+                <Input
+                  id="existingOrgId"
+                  value={formData.existingOrgId}
+                  onChange={(e) =>
+                    setFormData({ ...formData, existingOrgId: e.target.value })
+                  }
+                  required
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="existingOrgPassword">
+                  Organization Password
+                </Label>
+                <Input
+                  id="existingOrgPassword"
+                  type="password"
+                  value={formData.existingOrgPassword}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      existingOrgPassword: e.target.value,
+                    })
+                  }
+                  required
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="rank">Rank (Optional)</Label>
+                <Input
+                  id="rank"
+                  value={formData.rank}
+                  onChange={(e) =>
+                    setFormData({ ...formData, rank: e.target.value })
+                  }
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="resumeUrl">Resume URL (Optional)</Label>
+                <Input
+                  id="resumeUrl"
+                  value={formData.resumeUrl}
+                  onChange={(e) =>
+                    setFormData({ ...formData, resumeUrl: e.target.value })
+                  }
+                  className="mt-1"
+                />
+              </div>
+            </>
+          )}
+
+          <Button
+            type="submit"
+            className="w-full bg-gradient-gold text-primary-foreground"
+            disabled={loading}
+          >
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {formData.role === "CEO" ? "Create Organization & Go to Dashboard" : "Submit for Approval"}
+          </Button>
+        </form>
+      </Card>
     </div>
   );
 }
