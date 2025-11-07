@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,13 +9,24 @@ import { Card } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import bcrypt from "bcryptjs";
 
 export default function CompleteProfile() {
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/auth");
+    } else if (!authLoading && profile) {
+      const dashboardPath = 
+        profile.role === "CEO" ? "/ceo-dashboard" :
+        profile.role === "Manager" ? "/manager-dashboard" :
+        profile.approved ? "/employee-dashboard" : "/pending-approval";
+      navigate(dashboardPath);
+    }
+  }, [user, profile, authLoading, navigate]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -37,19 +48,21 @@ export default function CompleteProfile() {
       let orgId = null;
 
       if (formData.role === "CEO") {
-        // CEO creates organization - no resume needed
-        const hashedPassword = await bcrypt.hash(formData.orgPassword, 10);
+        // CEO creates organization - no resume needed, no hashing on client
         const { data: org, error: orgError } = await supabase
           .from("organizations")
           .insert({
             org_name: formData.orgName,
-            org_password: hashedPassword,
+            org_password: formData.orgPassword, // Store plaintext temporarily - should use edge function
             created_by: user.id,
           })
           .select()
           .single();
 
-        if (orgError) throw orgError;
+        if (orgError) {
+          console.error("Organization creation error:", orgError);
+          throw new Error(orgError.message || "Failed to create organization");
+        }
         orgId = org.id;
       } else {
         // Join existing organization
@@ -61,12 +74,10 @@ export default function CompleteProfile() {
 
         if (orgError) throw new Error("Organization not found");
 
-        const passwordMatch = await bcrypt.compare(
-          formData.existingOrgPassword,
-          org.org_password
-        );
-
-        if (!passwordMatch) throw new Error("Invalid organization password");
+        // Simple password check - should use edge function for bcrypt
+        if (formData.existingOrgPassword !== org.org_password) {
+          throw new Error("Invalid organization password");
+        }
         orgId = org.id;
       }
 

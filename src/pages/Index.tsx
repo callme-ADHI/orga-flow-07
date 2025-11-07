@@ -7,17 +7,34 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, profile, loading } = useAuth();
 
   useEffect(() => {
+    if (loading) return;
+    
     if (user && profile?.approved) {
       const dashboardPath = 
         profile.role === "CEO" ? "/ceo-dashboard" :
         profile.role === "Manager" ? "/manager-dashboard" :
         "/employee-dashboard";
       navigate(dashboardPath);
+    } else if (user && profile && !profile.approved) {
+      navigate("/pending-approval");
+    } else if (user && !profile) {
+      navigate("/complete-profile");
     }
-  }, [user, profile, navigate]);
+  }, [user, profile, loading, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-dark flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-dark">
@@ -40,48 +57,16 @@ const Index = () => {
                 ORGA
               </h1>
             </div>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
               Next-generation organizational workflow platform with intelligent task delegation and hierarchical management
             </p>
-          </div>
-
-          {/* CTA Cards */}
-          <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-20">
-            <Card 
-              className="bg-gradient-card border-border/50 p-8 hover:shadow-gold transition-all duration-300 cursor-pointer group"
-              onClick={() => navigate('/auth?action=create')}
+            <Button
+              size="lg"
+              className="bg-gradient-gold text-primary-foreground hover:opacity-90"
+              onClick={() => navigate("/auth")}
             >
-              <div className="text-center">
-                <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                  <Building2 className="w-8 h-8 text-primary" />
-                </div>
-                <h2 className="text-2xl font-semibold mb-2">Create Organization</h2>
-                <p className="text-muted-foreground mb-6">
-                  Start your organizational hierarchy as CEO
-                </p>
-                <Button className="w-full bg-gradient-gold text-primary-foreground font-semibold hover:shadow-gold">
-                  Create
-                </Button>
-              </div>
-            </Card>
-
-            <Card 
-              className="bg-gradient-card border-border/50 p-8 hover:shadow-gold transition-all duration-300 cursor-pointer group"
-              onClick={() => navigate('/auth?action=join')}
-            >
-              <div className="text-center">
-                <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                  <Users className="w-8 h-8 text-primary" />
-                </div>
-                <h2 className="text-2xl font-semibold mb-2">Join Organization</h2>
-                <p className="text-muted-foreground mb-6">
-                  Become part of an existing organization
-                </p>
-                <Button variant="outline" className="w-full border-primary/30 hover:bg-primary/10">
-                  Join
-                </Button>
-              </div>
-            </Card>
+              Get Started
+            </Button>
           </div>
 
           {/* Features */}
