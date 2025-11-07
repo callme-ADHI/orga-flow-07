@@ -428,6 +428,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_same_org: { Args: { check_org_id: string }; Returns: boolean }
       generate_custom_id: {
         Args: { org_uuid: string; role_type: string }
         Returns: string
