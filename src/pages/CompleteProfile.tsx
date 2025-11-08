@@ -36,8 +36,9 @@ export default function CompleteProfile() {
     existingOrgId: "",
     existingOrgPassword: "",
     rank: "",
-    resumeUrl: "",
   });
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [uploadingResume, setUploadingResume] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +47,27 @@ export default function CompleteProfile() {
     setLoading(true);
     try {
       let orgId = null;
+      let resumeUrl = null;
+
+      // Upload resume if provided
+      if (resumeFile && formData.role !== "CEO") {
+        setUploadingResume(true);
+        const fileExt = resumeFile.name.split('.').pop();
+        const filePath = `${user.id}/${Date.now()}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('resumes')
+          .upload(filePath, resumeFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('resumes')
+          .getPublicUrl(filePath);
+
+        resumeUrl = publicUrl;
+        setUploadingResume(false);
+      }
 
       if (formData.role === "CEO") {
         // CEO creates organization - no resume needed, no hashing on client
@@ -89,7 +111,7 @@ export default function CompleteProfile() {
         role: formData.role,
         org_id: orgId,
         rank: formData.rank || null,
-        resume_url: formData.resumeUrl || null,
+        resume_url: resumeUrl,
       });
 
       if (profileError) throw profileError;
@@ -253,15 +275,33 @@ export default function CompleteProfile() {
                 />
               </div>
               <div>
-                <Label htmlFor="resumeUrl">Resume URL (Optional)</Label>
+                <Label htmlFor="resume">Upload Resume (PDF, Optional)</Label>
                 <Input
-                  id="resumeUrl"
-                  value={formData.resumeUrl}
-                  onChange={(e) =>
-                    setFormData({ ...formData, resumeUrl: e.target.value })
-                  }
+                  id="resume"
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.size > 10485760) {
+                        toast({
+                          title: "File too large",
+                          description: "Resume must be less than 10MB",
+                          variant: "destructive",
+                        });
+                        e.target.value = '';
+                        return;
+                      }
+                      setResumeFile(file);
+                    }
+                  }}
                   className="mt-1"
                 />
+                {resumeFile && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Selected: {resumeFile.name}
+                  </p>
+                )}
               </div>
             </>
           )}
@@ -269,10 +309,10 @@ export default function CompleteProfile() {
           <Button
             type="submit"
             className="w-full bg-gradient-gold text-primary-foreground"
-            disabled={loading}
+            disabled={loading || uploadingResume}
           >
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {formData.role === "CEO" ? "Create Organization & Go to Dashboard" : "Submit for Approval"}
+            {(loading || uploadingResume) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {uploadingResume ? "Uploading Resume..." : loading ? "Processing..." : formData.role === "CEO" ? "Create Organization & Go to Dashboard" : "Submit for Approval"}
           </Button>
         </form>
       </Card>
