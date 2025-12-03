@@ -17,9 +17,14 @@ export default function CompleteProfile() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (authLoading) return;
+    
+    if (!user) {
       navigate("/auth");
-    } else if (!authLoading && profile) {
+      return;
+    }
+    
+    if (profile) {
       const dashboardPath = 
         profile.role === "CEO" ? "/ceo-dashboard" :
         profile.role === "Manager" ? "/manager-dashboard" :
@@ -42,14 +47,21 @@ export default function CompleteProfile() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to complete your profile",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setLoading(true);
     try {
-      let orgId = null;
-      let resumeUrl = null;
+      let orgId: string | null = null;
+      let resumeUrl: string | null = null;
 
-      // Upload resume if provided
+      // Upload resume if provided (for non-CEO roles)
       if (resumeFile && formData.role !== "CEO") {
         setUploadingResume(true);
         const fileExt = resumeFile.name.split('.').pop();
@@ -59,7 +71,10 @@ export default function CompleteProfile() {
           .from('resumes')
           .upload(filePath, resumeFile);
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error("Resume upload error:", uploadError);
+          throw new Error("Failed to upload resume: " + uploadError.message);
+        }
 
         const { data: { publicUrl } } = supabase.storage
           .from('resumes')
@@ -70,12 +85,20 @@ export default function CompleteProfile() {
       }
 
       if (formData.role === "CEO") {
-        // CEO creates organization - no resume needed, no hashing on client
+        // Validate CEO form
+        if (!formData.orgName.trim()) {
+          throw new Error("Organization name is required");
+        }
+        if (!formData.orgPassword.trim()) {
+          throw new Error("Organization password is required");
+        }
+
+        // CEO creates organization
         const { data: org, error: orgError } = await supabase
           .from("organizations")
           .insert({
-            org_name: formData.orgName,
-            org_password: formData.orgPassword, // Store plaintext temporarily - should use edge function
+            org_name: formData.orgName.trim(),
+            org_password: formData.orgPassword,
             created_by: user.id,
           })
           .select()
@@ -85,37 +108,53 @@ export default function CompleteProfile() {
           console.error("Organization creation error:", orgError);
           throw new Error(orgError.message || "Failed to create organization");
         }
+        
         orgId = org.id;
       } else {
+        // Validate Employee/Manager form
+        if (!formData.existingOrgId.trim()) {
+          throw new Error("Organization ID is required");
+        }
+        if (!formData.existingOrgPassword.trim()) {
+          throw new Error("Organization password is required");
+        }
+
         // Join existing organization
         const { data: org, error: orgError } = await supabase
           .from("organizations")
           .select("*")
-          .eq("id", formData.existingOrgId)
+          .eq("id", formData.existingOrgId.trim())
           .single();
 
-        if (orgError) throw new Error("Organization not found");
+        if (orgError || !org) {
+          throw new Error("Organization not found. Please check the Organization ID.");
+        }
 
-        // Simple password check - should use edge function for bcrypt
+        // Verify password
         if (formData.existingOrgPassword !== org.org_password) {
           throw new Error("Invalid organization password");
         }
+        
         orgId = org.id;
       }
 
-      // Create profile - CEO is auto-approved by trigger
+      // Create profile - CEO is auto-approved by database trigger
       const { error: profileError } = await supabase.from("profiles").insert({
         user_id: user.id,
-        name: formData.name,
+        name: formData.name.trim(),
         email: user.email!,
         role: formData.role,
         org_id: orgId,
-        rank: formData.rank || null,
+        rank: formData.rank.trim() || null,
         resume_url: resumeUrl,
       });
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error("Profile creation error:", profileError);
+        throw new Error(profileError.message || "Failed to create profile");
+      }
 
+      // Refresh profile in context
       await refreshProfile();
 
       toast({
@@ -133,15 +172,29 @@ export default function CompleteProfile() {
         navigate("/pending-approval");
       }
     } catch (error: any) {
+      console.error("Submit error:", error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Something went wrong",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
+      setUploadingResume(false);
     }
   };
+
+  // Show loading while auth is initializing
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-dark flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-dark flex items-center justify-center p-4">
@@ -162,6 +215,7 @@ export default function CompleteProfile() {
               }
               required
               className="mt-1"
+              placeholder="Enter your full name"
             />
           </div>
 
@@ -199,7 +253,7 @@ export default function CompleteProfile() {
             </RadioGroup>
           </div>
 
-          {/* CEO: Create Organization - No resume needed */}
+          {/* CEO: Create Organization */}
           {formData.role === "CEO" && (
             <>
               <div>
@@ -212,6 +266,7 @@ export default function CompleteProfile() {
                   }
                   required
                   className="mt-1"
+                  placeholder="Enter organization name"
                 />
               </div>
               <div>
@@ -225,7 +280,11 @@ export default function CompleteProfile() {
                   }
                   required
                   className="mt-1"
+                  placeholder="Create a password for employees to join"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Share this password with employees so they can join your organization.
+                </p>
               </div>
             </>
           )}
@@ -243,12 +302,14 @@ export default function CompleteProfile() {
                   }
                   required
                   className="mt-1"
+                  placeholder="Enter the organization ID from your CEO"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Ask your CEO for the organization ID.
+                </p>
               </div>
               <div>
-                <Label htmlFor="existingOrgPassword">
-                  Organization Password
-                </Label>
+                <Label htmlFor="existingOrgPassword">Organization Password</Label>
                 <Input
                   id="existingOrgPassword"
                   type="password"
@@ -261,6 +322,7 @@ export default function CompleteProfile() {
                   }
                   required
                   className="mt-1"
+                  placeholder="Enter the organization password"
                 />
               </div>
               <div>
@@ -272,6 +334,7 @@ export default function CompleteProfile() {
                     setFormData({ ...formData, rank: e.target.value })
                   }
                   className="mt-1"
+                  placeholder="e.g., Senior Developer, Marketing Lead"
                 />
               </div>
               <div>
@@ -312,9 +375,25 @@ export default function CompleteProfile() {
             disabled={loading || uploadingResume}
           >
             {(loading || uploadingResume) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {uploadingResume ? "Uploading Resume..." : loading ? "Processing..." : formData.role === "CEO" ? "Create Organization & Go to Dashboard" : "Submit for Approval"}
+            {uploadingResume 
+              ? "Uploading Resume..." 
+              : loading 
+                ? "Processing..." 
+                : formData.role === "CEO" 
+                  ? "Create Organization & Go to Dashboard" 
+                  : "Submit for Approval"}
           </Button>
         </form>
+
+        <div className="mt-6 text-center">
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ← Back to Home
+          </button>
+        </div>
       </Card>
     </div>
   );
