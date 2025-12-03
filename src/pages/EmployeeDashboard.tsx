@@ -2,41 +2,63 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
+import { ClipboardList, Clock, CheckCircle2, AlertTriangle, FolderKanban } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useMyTasks, useMyGroups } from "@/hooks/useOrgData";
+import { useAuth } from "@/contexts/AuthContext";
 
 const EmployeeDashboard = () => {
-  const tasks = [
-    { id: 1, title: "Complete quarterly report", status: "completed", priority: "high", deadline: "2024-01-15" },
-    { id: 2, title: "Review team documentation", status: "assigned", priority: "medium", deadline: "2024-01-20" },
-    { id: 3, title: "Update project timeline", status: "overdue", priority: "high", deadline: "2024-01-10" },
-    { id: 4, title: "Prepare presentation slides", status: "late", priority: "medium", deadline: "2024-01-12" },
-  ];
+  const navigate = useNavigate();
+  const { profile } = useAuth();
+  const { tasks, loading: tasksLoading } = useMyTasks();
+  const { groups, loading: groupsLoading } = useMyGroups();
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed": return "text-success bg-success/10 border-success/30";
-      case "overdue": return "text-overdue bg-overdue/10 border-overdue/30";
-      case "late": return "text-late bg-late/10 border-late/30";
-      default: return "text-foreground bg-muted border-border";
-    }
+  const loading = tasksLoading || groupsLoading;
+
+  // Calculate stats
+  const activeTasks = tasks.filter(t => t.status !== "completed").length;
+  const completedTasks = tasks.filter(t => t.status === "completed").length;
+  const overdueTasks = tasks.filter(t => {
+    const dueDate = new Date(t.due_date);
+    return dueDate < new Date() && t.status !== "completed";
+  }).length;
+
+  const getStatusColor = (status: string, dueDate: string) => {
+    if (status === "completed") return "text-success bg-success/10 border-success/30";
+    const isOverdue = new Date(dueDate) < new Date();
+    if (isOverdue) return "text-destructive bg-destructive/10 border-destructive/30";
+    if (status === "in_progress") return "text-primary bg-primary/10 border-primary/30";
+    return "text-foreground bg-muted border-border";
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
       <div>
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Employee Dashboard</h1>
-          <p className="text-muted-foreground">Your tasks and performance overview</p>
+          <h1 className="text-4xl font-bold mb-2 bg-gradient-gold bg-clip-text text-transparent">
+            Employee Dashboard
+          </h1>
+          <p className="text-muted-foreground">Welcome back, {profile?.name}</p>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <Card className="bg-gradient-card border-border/50 p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Active Tasks</p>
-                <p className="text-3xl font-bold">8</p>
+                <p className="text-3xl font-bold">{activeTasks}</p>
               </div>
               <ClipboardList className="w-8 h-8 text-primary" />
             </div>
@@ -46,7 +68,7 @@ const EmployeeDashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Completed</p>
-                <p className="text-3xl font-bold text-success">12</p>
+                <p className="text-3xl font-bold text-success">{completedTasks}</p>
               </div>
               <CheckCircle2 className="w-8 h-8 text-success" />
             </div>
@@ -56,9 +78,19 @@ const EmployeeDashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Overdue</p>
-                <p className="text-3xl font-bold text-overdue">2</p>
+                <p className="text-3xl font-bold text-destructive">{overdueTasks}</p>
               </div>
-              <AlertTriangle className="w-8 h-8 text-overdue" />
+              <AlertTriangle className="w-8 h-8 text-destructive" />
+            </div>
+          </Card>
+
+          <Card className="bg-gradient-card border-border/50 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">My Groups</p>
+                <p className="text-3xl font-bold">{groups.length}</p>
+              </div>
+              <FolderKanban className="w-8 h-8 text-primary" />
             </div>
           </Card>
 
@@ -66,10 +98,10 @@ const EmployeeDashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Your Rank</p>
-                <p className="text-3xl font-bold text-primary">A</p>
+                <p className="text-3xl font-bold text-primary">{profile?.rank || "N/A"}</p>
               </div>
               <div className="w-8 h-8 bg-gradient-gold rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold">A</span>
+                <span className="text-primary-foreground font-bold">{profile?.rank?.charAt(0) || "?"}</span>
               </div>
             </div>
           </Card>
@@ -79,48 +111,42 @@ const EmployeeDashboard = () => {
         <Card className="bg-gradient-card border-border/50 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-semibold">My Tasks</h2>
-            <div className="flex gap-2">
-              <Badge variant="outline" className="bg-success/10 text-success border-success/30">
-                <CheckCircle2 className="w-3 h-3 mr-1" />
-                Completed
-              </Badge>
-              <Badge variant="outline" className="bg-late/10 text-late border-late/30">
-                <Clock className="w-3 h-3 mr-1" />
-                Late
-              </Badge>
-              <Badge variant="outline" className="bg-overdue/10 text-overdue border-overdue/30">
-                <AlertTriangle className="w-3 h-3 mr-1" />
-                Overdue
-              </Badge>
-            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate("/my-tasks")}>
+              View All
+            </Button>
           </div>
 
-          <div className="space-y-3">
-            {tasks.map((task) => (
-              <div 
-                key={task.id} 
-                className="flex items-center justify-between p-4 bg-background/30 rounded-lg hover:bg-background/50 transition-colors"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="font-semibold">{task.title}</h3>
-                    <Badge className={getStatusColor(task.status)}>
-                      {task.status}
-                    </Badge>
-                    <Badge variant="outline">
-                      {task.priority}
-                    </Badge>
+          {tasks.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">No tasks assigned to you yet</p>
+          ) : (
+            <div className="space-y-3">
+              {tasks.slice(0, 5).map((task) => (
+                <div 
+                  key={task.id} 
+                  className="flex items-center justify-between p-4 bg-background/30 rounded-lg hover:bg-background/50 transition-colors"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="font-semibold">{task.title}</h3>
+                      <Badge className={getStatusColor(task.status || "assigned", task.due_date)}>
+                        {task.status || "assigned"}
+                      </Badge>
+                      <Badge variant="outline">
+                        {task.priority === 1 ? "High" : task.priority === 2 ? "Medium" : "Low"}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      Due: {new Date(task.due_date).toLocaleDateString()}
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Deadline: {new Date(task.deadline).toLocaleDateString()}
-                  </p>
+                  <Button size="sm" className="bg-primary/10 hover:bg-primary/20 text-primary" onClick={() => navigate("/my-tasks")}>
+                    View Details
+                  </Button>
                 </div>
-                <Button size="sm" className="bg-primary/10 hover:bg-primary/20 text-primary">
-                  View Details
-                </Button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
     </DashboardLayout>
