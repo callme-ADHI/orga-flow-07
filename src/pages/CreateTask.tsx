@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,26 +8,135 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useOrgData } from "@/hooks/useOrgData";
+import { Loader2 } from "lucide-react";
 
 const CreateTask = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const { employees, groups } = useOrgData();
+  const [loading, setLoading] = useState(false);
+  
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     priority: "2",
     dueDate: "",
     assignmentType: "individual",
-    assignee: "",
+    assigneeId: "",
+    groupId: "",
+    assignedRank: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Get unique ranks from employees
+  const uniqueRanks = [...new Set(employees.filter(e => e.rank).map(e => e.rank))];
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "Task created successfully!",
-      description: "The task has been assigned to the team member.",
-    });
-    navigate("/all-tasks");
+    
+    if (!profile?.id || !profile?.org_id) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to create tasks",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Create the task
+      const { data: task, error: taskError } = await supabase
+        .from("tasks")
+        .insert({
+          title: formData.title,
+          description: formData.description || null,
+          priority: parseInt(formData.priority),
+          due_date: formData.dueDate,
+          assignment_type: formData.assignmentType,
+          assigned_rank: formData.assignmentType === "rank" ? formData.assignedRank : null,
+          assigned_by: profile.id,
+          org_id: profile.org_id,
+        })
+        .select()
+        .single();
+
+      if (taskError) throw taskError;
+
+      // Create task assignment based on assignment type
+      if (formData.assignmentType === "individual" && formData.assigneeId) {
+        await supabase.from("task_assignments").insert({
+          task_id: task.id,
+          profile_id: formData.assigneeId,
+        });
+
+        // Create notification for assignee
+        await supabase.from("notifications").insert({
+          profile_id: formData.assigneeId,
+          title: "New Task Assigned",
+          message: `You have been assigned a new task: ${formData.title}`,
+          type: "task_assigned",
+        });
+      } else if (formData.assignmentType === "group" && formData.groupId) {
+        await supabase.from("task_assignments").insert({
+          task_id: task.id,
+          group_id: formData.groupId,
+        });
+
+        // Get group members and notify them
+        const { data: members } = await supabase
+          .from("group_members")
+          .select("profile_id")
+          .eq("group_id", formData.groupId);
+
+        if (members) {
+          for (const member of members) {
+            await supabase.from("notifications").insert({
+              profile_id: member.profile_id,
+              title: "New Group Task",
+              message: `A new task has been assigned to your group: ${formData.title}`,
+              type: "task_assigned",
+            });
+          }
+        }
+      } else if (formData.assignmentType === "rank" && formData.assignedRank) {
+        // Find all employees with the selected rank
+        const employeesWithRank = employees.filter(e => e.rank === formData.assignedRank);
+        
+        for (const emp of employeesWithRank) {
+          await supabase.from("task_assignments").insert({
+            task_id: task.id,
+            profile_id: emp.id,
+          });
+
+          await supabase.from("notifications").insert({
+            profile_id: emp.id,
+            title: "New Task for Your Rank",
+            message: `A new task has been assigned to rank ${formData.assignedRank}: ${formData.title}`,
+            type: "task_assigned",
+          });
+        }
+      }
+
+      toast({
+        title: "Task created successfully!",
+        description: "The task has been assigned.",
+      });
+      navigate("/all-tasks");
+    } catch (error: any) {
+      console.error("Error creating task:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create task",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -90,13 +199,23 @@ const CreateTask = () => {
                   onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
                   required
                   className="mt-1"
+                  min={new Date().toISOString().split('T')[0]}
                 />
               </div>
             </div>
 
             <div>
               <Label htmlFor="assignmentType">Assignment Type</Label>
-              <Select value={formData.assignmentType} onValueChange={(value) => setFormData({ ...formData, assignmentType: value })}>
+              <Select 
+                value={formData.assignmentType} 
+                onValueChange={(value) => setFormData({ 
+                  ...formData, 
+                  assignmentType: value,
+                  assigneeId: "",
+                  groupId: "",
+                  assignedRank: "",
+                })}
+              >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Select assignment type" />
                 </SelectTrigger>
@@ -108,22 +227,76 @@ const CreateTask = () => {
               </Select>
             </div>
 
-            <div>
-              <Label htmlFor="assignee">Assign To</Label>
-              <Select value={formData.assignee} onValueChange={(value) => setFormData({ ...formData, assignee: value })}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select assignee" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="john">John Smith</SelectItem>
-                  <SelectItem value="sarah">Sarah Johnson</SelectItem>
-                  <SelectItem value="mike">Mike Chen</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {formData.assignmentType === "individual" && (
+              <div>
+                <Label htmlFor="assignee">Assign To</Label>
+                <Select 
+                  value={formData.assigneeId} 
+                  onValueChange={(value) => setFormData({ ...formData, assigneeId: value })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.filter(e => e.role === "Employee").map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {emp.name} {emp.rank ? `(${emp.rank})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-            <Button type="submit" className="w-full bg-gradient-gold text-primary-foreground">
-              Create Task
+            {formData.assignmentType === "group" && (
+              <div>
+                <Label htmlFor="group">Assign To Group</Label>
+                <Select 
+                  value={formData.groupId} 
+                  onValueChange={(value) => setFormData({ ...formData, groupId: value })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groups.map((group) => (
+                      <SelectItem key={group.id} value={group.id}>
+                        {group.group_name} ({group.member_count} members)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {formData.assignmentType === "rank" && (
+              <div>
+                <Label htmlFor="rank">Assign To Rank</Label>
+                <Select 
+                  value={formData.assignedRank} 
+                  onValueChange={(value) => setFormData({ ...formData, assignedRank: value })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select rank" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueRanks.map((rank) => (
+                      <SelectItem key={rank} value={rank!}>
+                        Rank {rank}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <Button 
+              type="submit" 
+              className="w-full bg-gradient-gold text-primary-foreground"
+              disabled={loading}
+            >
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loading ? "Creating..." : "Create Task"}
             </Button>
           </form>
         </Card>
