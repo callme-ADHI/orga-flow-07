@@ -71,16 +71,19 @@ const CEODashboard = () => {
                 </div>
                 <div>
                   <h2 className="text-xl font-bold">{orgInfo.name}</h2>
-                  <p className="text-sm text-muted-foreground">Organization ID: {orgInfo.id.slice(0, 8)}...</p>
+                  <p className="text-sm text-muted-foreground">Share this name with employees to join</p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={copyOrgId}>
+              <Button variant="outline" size="sm" onClick={() => {
+                navigator.clipboard.writeText(orgInfo.name);
+                toast.success("Organization name copied!");
+              }}>
                 <Copy className="w-4 h-4 mr-2" />
-                Copy Full ID
+                Copy Org Name
               </Button>
             </div>
             <p className="text-xs text-muted-foreground mt-4">
-              Share this Organization ID with employees so they can join your organization.
+              Employees need the exact organization name and password to join.
             </p>
           </Card>
         )}

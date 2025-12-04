@@ -89,13 +89,34 @@ export default function PendingApprovals() {
 
       if (error) throw error;
 
-      // Create notification
+      // Create notification for the approved user
       await supabase.from("notifications").insert({
         profile_id: profileId,
         title: "Welcome to the Organization!",
-        message: `You have been approved as ${role} with rank ${rank}`,
+        message: `You have been approved as ${role} with rank ${rank}. Your ID is ${customIdData}`,
         type: "member_approved",
       });
+
+      // Notify all CEO and Managers about the new member
+      const { data: managers } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("org_id", profile?.org_id)
+        .in("role", ["CEO", "Manager"])
+        .eq("approved", true);
+
+      if (managers) {
+        for (const manager of managers) {
+          if (manager.id !== profile?.id) {
+            await supabase.from("notifications").insert({
+              profile_id: manager.id,
+              title: "New Member Approved",
+              message: `${pendingUsers.find(u => u.id === profileId)?.name} has been approved as ${role}`,
+              type: "member_approved",
+            });
+          }
+        }
+      }
 
       toast.success("User approved successfully");
       fetchPendingUsers();
