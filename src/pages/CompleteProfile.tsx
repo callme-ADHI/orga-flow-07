@@ -113,21 +113,21 @@ export default function CompleteProfile() {
       } else {
         // Validate Employee/Manager form
         if (!formData.existingOrgId.trim()) {
-          throw new Error("Organization ID is required");
+          throw new Error("Organization name is required");
         }
         if (!formData.existingOrgPassword.trim()) {
           throw new Error("Organization password is required");
         }
 
-        // Join existing organization
+        // Join existing organization by name
         const { data: org, error: orgError } = await supabase
           .from("organizations")
           .select("*")
-          .eq("id", formData.existingOrgId.trim())
+          .eq("org_name", formData.existingOrgId.trim())
           .single();
 
         if (orgError || !org) {
-          throw new Error("Organization not found. Please check the Organization ID.");
+          throw new Error("Organization not found. Please check the organization name.");
         }
 
         // Verify password
@@ -293,7 +293,7 @@ export default function CompleteProfile() {
           {formData.role !== "CEO" && (
             <>
               <div>
-                <Label htmlFor="existingOrgId">Organization ID</Label>
+                <Label htmlFor="existingOrgId">Organization Name</Label>
                 <Input
                   id="existingOrgId"
                   value={formData.existingOrgId}
@@ -302,10 +302,10 @@ export default function CompleteProfile() {
                   }
                   required
                   className="mt-1"
-                  placeholder="Enter the organization ID from your CEO"
+                  placeholder="Enter your organization's name"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Ask your CEO for the organization ID.
+                  Ask your CEO for the exact organization name.
                 </p>
               </div>
               <div>
