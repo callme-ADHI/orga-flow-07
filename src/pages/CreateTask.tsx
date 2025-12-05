@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -120,6 +120,23 @@ const CreateTask = () => {
             type: "task_assigned",
           });
         }
+      } else if (formData.assignmentType === "everyone") {
+        // Assign to all employees in the organization
+        const allEmployees = employees.filter(e => e.role === "Employee" && e.approved);
+        
+        for (const emp of allEmployees) {
+          await supabase.from("task_assignments").insert({
+            task_id: task.id,
+            profile_id: emp.id,
+          });
+
+          await supabase.from("notifications").insert({
+            profile_id: emp.id,
+            title: "New Task Available",
+            message: `A new task is available for everyone: ${formData.title}. First to complete wins!`,
+            type: "task_assigned",
+          });
+        }
       }
 
       toast({
@@ -223,6 +240,7 @@ const CreateTask = () => {
                   <SelectItem value="individual">Individual</SelectItem>
                   <SelectItem value="group">Group</SelectItem>
                   <SelectItem value="rank">By Rank</SelectItem>
+                  <SelectItem value="everyone">Everyone (First to Complete)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -287,6 +305,14 @@ const CreateTask = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+
+            {formData.assignmentType === "everyone" && (
+              <div className="p-4 bg-primary/10 rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  This task will be assigned to all employees. The first person to complete it will be credited, and the task will be marked as done for everyone.
+                </p>
               </div>
             )}
 

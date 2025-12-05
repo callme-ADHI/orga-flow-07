@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -6,9 +7,41 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 const Settings = () => {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({
+    name: profile?.name || "",
+    rank: profile?.rank || "",
+  });
+
+  const handleSaveProfile = async () => {
+    if (!profile?.id) return;
+    
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          name: formData.name,
+          rank: formData.rank || null,
+        })
+        .eq("id", profile.id);
+
+      if (error) throw error;
+      
+      await refreshProfile();
+      toast.success("Profile updated successfully!");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update profile");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -27,7 +60,12 @@ const Settings = () => {
             <div className="space-y-4">
               <div>
                 <Label htmlFor="name">Full Name</Label>
-                <Input id="name" defaultValue={profile?.name} className="mt-1" />
+                <Input 
+                  id="name" 
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="mt-1" 
+                />
               </div>
               <div>
                 <Label htmlFor="email">Email</Label>
@@ -35,9 +73,20 @@ const Settings = () => {
               </div>
               <div>
                 <Label htmlFor="rank">Rank</Label>
-                <Input id="rank" defaultValue={profile?.rank || "N/A"} className="mt-1" />
+                <Input 
+                  id="rank" 
+                  value={formData.rank}
+                  onChange={(e) => setFormData({ ...formData, rank: e.target.value })}
+                  className="mt-1" 
+                  placeholder="e.g., S, A, B, C, D, E"
+                />
               </div>
-              <Button className="bg-gradient-gold text-primary-foreground">
+              <Button 
+                className="bg-gradient-gold text-primary-foreground"
+                onClick={handleSaveProfile}
+                disabled={saving}
+              >
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save Changes
               </Button>
             </div>
