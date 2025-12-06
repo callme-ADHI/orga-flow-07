@@ -23,6 +23,8 @@ import Analytics from "./pages/Analytics";
 import Performance from "./pages/Performance";
 import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
+import Documents from "./pages/Documents";
+import Complaints from "./pages/Complaints";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -116,6 +118,22 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={["CEO", "Manager"]}>
                   <Analytics />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/documents"
+              element={
+                <ProtectedRoute allowedRoles={["CEO", "Manager"]}>
+                  <Documents />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/complaints"
+              element={
+                <ProtectedRoute>
+                  <Complaints />
                 </ProtectedRoute>
               }
             />

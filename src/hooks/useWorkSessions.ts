@@ -24,7 +24,7 @@ export function useWorkSessions(taskId?: string) {
     if (!profile?.id) return;
 
     let query = supabase
-      .from("work_sessions" as any)
+      .from("work_sessions")
       .select("*")
       .eq("profile_id", profile.id)
       .order("created_at", { ascending: false });
@@ -41,7 +41,7 @@ export function useWorkSessions(taskId?: string) {
       return;
     }
 
-    const typedData = (data || []) as unknown as WorkSession[];
+    const typedData = (data || []) as WorkSession[];
     setSessions(typedData);
     
     const active = typedData.find(s => s.is_active);
@@ -62,7 +62,7 @@ export function useWorkSessions(taskId?: string) {
     }
 
     const { data, error } = await supabase
-      .from("work_sessions" as any)
+      .from("work_sessions")
       .insert({
         task_id: taskIdToStart,
         profile_id: profile.id,
@@ -77,7 +77,7 @@ export function useWorkSessions(taskId?: string) {
       return null;
     }
 
-    const typedData = data as unknown as WorkSession;
+    const typedData = data as WorkSession;
     setActiveSession(typedData);
     setSessions(prev => [typedData, ...prev]);
     return typedData;
@@ -91,7 +91,7 @@ export function useWorkSessions(taskId?: string) {
     const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
 
     const { error } = await supabase
-      .from("work_sessions" as any)
+      .from("work_sessions")
       .update({
         ended_at: endTime.toISOString(),
         duration_minutes: durationMinutes,
