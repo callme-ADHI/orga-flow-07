@@ -47,11 +47,21 @@ export function useWorkSessions(taskId?: string) {
     const active = typedData.find(s => s.is_active);
     setActiveSession(active || null);
     
-    const total = typedData.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
+    // Calculate total completed minutes (not including active session)
+    const total = typedData
+      .filter(s => !s.is_active)
+      .reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
     setTotalMinutes(total);
     
     setLoading(false);
   }, [profile?.id, taskId]);
+
+  // Get accumulated minutes for a specific task (used for timer display)
+  const getAccumulatedMinutesForTask = useCallback((taskIdToCheck: string): number => {
+    return sessions
+      .filter(s => s.task_id === taskIdToCheck && !s.is_active)
+      .reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
+  }, [sessions]);
 
   const startWork = async (taskIdToStart: string): Promise<WorkSession | null> => {
     if (!profile?.id) return null;
@@ -126,7 +136,8 @@ export function useWorkSessions(taskId?: string) {
     loading,
     startWork,
     pauseWork,
-    refresh: fetchSessions
+    refresh: fetchSessions,
+    getAccumulatedMinutesForTask
   };
 }
 

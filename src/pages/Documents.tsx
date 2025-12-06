@@ -28,6 +28,8 @@ const Documents = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("all");
 
+  const isCEO = profile?.role === "CEO";
+
   useEffect(() => {
     if (profile?.org_id) {
       fetchAllDocuments();
@@ -84,7 +86,7 @@ const Documents = () => {
           task_title: tf.tasks?.title || "Unknown Task",
         }));
 
-      // Fetch complaints
+      // Fetch complaints - RLS already filters based on role
       const { data: complaintsData } = await supabase
         .from("complaints")
         .select(`
@@ -96,7 +98,6 @@ const Documents = () => {
           submitted_by,
           profiles:submitted_by (name)
         `)
-        .eq("org_id", profile.org_id)
         .order("created_at", { ascending: false });
 
       const complaintDocs: DocumentItem[] = (complaintsData || []).map((c: any) => ({
@@ -104,7 +105,8 @@ const Documents = () => {
         file_name: c.subject,
         file_url: "",
         uploaded_at: c.created_at || "",
-        profile_name: c.profiles?.name || "Unknown",
+        // CEO sees submitter name, Manager sees "Anonymous"
+        profile_name: isCEO ? (c.profiles?.name || "Unknown") : "Anonymous",
         profile_id: c.submitted_by,
         type: "complaint" as const,
         complaint_subject: c.subject,

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { AlertTriangle, Plus, CheckCircle, Clock, Loader2, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,7 +35,9 @@ const Complaints = () => {
   const [description, setDescription] = useState("");
   const [resolvingId, setResolvingId] = useState<string | null>(null);
 
-  const isManager = profile?.role === "CEO" || profile?.role === "Manager";
+  const isCEO = profile?.role === "CEO";
+  const isManager = profile?.role === "Manager";
+  const isManagerOrCEO = isCEO || isManager;
 
   useEffect(() => {
     if (profile?.org_id) {
@@ -48,6 +50,9 @@ const Complaints = () => {
     setLoading(true);
 
     try {
+      // Build query based on role
+      // For employees: RLS already filters to only their own complaints
+      // For managers/CEO: RLS allows viewing all in org
       const { data, error } = await supabase
         .from("complaints")
         .select(`
@@ -55,7 +60,6 @@ const Complaints = () => {
           submitter:submitted_by (name),
           resolver:resolved_by (name)
         `)
-        .eq("org_id", profile.org_id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -69,7 +73,10 @@ const Complaints = () => {
         resolved_at: c.resolved_at,
         submitted_by: c.submitted_by,
         resolved_by: c.resolved_by,
-        submitter_name: c.submitter?.name || "Unknown",
+        // CEO can see submitter name, Manager cannot, Employee sees their own
+        submitter_name: isCEO ? (c.submitter?.name || "Unknown") : 
+                        isManager ? "Anonymous" : 
+                        (c.submitter?.name || "You"),
         resolver_name: c.resolver?.name || null,
       }));
 
@@ -162,7 +169,9 @@ const Complaints = () => {
               Complaints
             </h1>
             <p className="text-muted-foreground">
-              {isManager ? "View and manage complaints from employees" : "Submit and track your complaints"}
+              {isCEO ? "View and manage all complaints from employees" : 
+               isManager ? "View and manage anonymous complaints" : 
+               "Submit and track your complaints"}
             </p>
           </div>
 
@@ -176,6 +185,10 @@ const Complaints = () => {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Submit a Complaint</DialogTitle>
+                <DialogDescription>
+                  Your complaint will be reviewed by management.
+                  {isManager && " Managers cannot see who submitted complaints."}
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 mt-4">
                 <div>
@@ -215,7 +228,7 @@ const Complaints = () => {
             <AlertTriangle className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
             <h3 className="text-xl font-semibold mb-2">No Complaints</h3>
             <p className="text-muted-foreground">
-              {isManager ? "No complaints have been submitted yet" : "You haven't submitted any complaints yet"}
+              {isManagerOrCEO ? "No complaints have been submitted yet" : "You haven't submitted any complaints yet"}
             </p>
           </Card>
         ) : (
@@ -230,6 +243,7 @@ const Complaints = () => {
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">{complaint.description}</p>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+                      {/* Show submitter info - CEO sees name, Manager sees "Anonymous", Employee sees "You" */}
                       <div className="flex items-center gap-1">
                         <User className="w-4 h-4" />
                         <span>From: {complaint.submitter_name}</span>
@@ -247,7 +261,7 @@ const Complaints = () => {
                     </div>
                   </div>
 
-                  {isManager && complaint.status === "pending" && (
+                  {isManagerOrCEO && complaint.status === "pending" && (
                     <Button
                       variant="outline"
                       size="sm"

@@ -3,8 +3,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Calendar, Clock, ClipboardList, Loader2, Play, Pause, Upload, FileText } from "lucide-react";
+import { Calendar, Clock, ClipboardList, Loader2, Play, Pause, Upload } from "lucide-react";
 import { useMyTasks } from "@/hooks/useOrgData";
 import { useWorkSessions, formatDuration } from "@/hooks/useWorkSessions";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,30 +13,37 @@ import { toast } from "sonner";
 const MyTasks = () => {
   const { profile } = useAuth();
   const { tasks, loading, refreshTasks } = useMyTasks();
-  const { activeSession, startWork, pauseWork, totalMinutes } = useWorkSessions();
+  const { activeSession, startWork, pauseWork, totalMinutes, getAccumulatedMinutesForTask } = useWorkSessions();
   const [updatingTask, setUpdatingTask] = useState<string | null>(null);
   const [uploadingTask, setUploadingTask] = useState<string | null>(null);
-  const [elapsedTime, setElapsedTime] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
-  // Timer for active session
+  // Timer for active session - accumulates previous session time
   useEffect(() => {
     if (!activeSession) {
-      setElapsedTime(0);
+      setElapsedSeconds(0);
       return;
     }
 
+    // Get accumulated time from previous sessions for this task
+    const previousMinutes = getAccumulatedMinutesForTask(activeSession.task_id);
+    const previousSeconds = previousMinutes * 60;
+
     const startTime = new Date(activeSession.started_at).getTime();
+    
     const updateTimer = () => {
       const now = Date.now();
-      setElapsedTime(Math.floor((now - startTime) / 1000));
+      const currentSessionSeconds = Math.floor((now - startTime) / 1000);
+      // Add previous sessions time to current session time
+      setElapsedSeconds(previousSeconds + currentSessionSeconds);
     };
 
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [activeSession]);
+  }, [activeSession, getAccumulatedMinutesForTask]);
 
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -66,11 +72,16 @@ const MyTasks = () => {
       // Update task status to in_progress if not already
       const task = tasks.find(t => t.id === taskId);
       if (task?.status === "assigned") {
-        await supabase
+        const { error } = await supabase
           .from("tasks")
           .update({ status: "in_progress" })
           .eq("id", taskId);
-        refreshTasks();
+        
+        if (error) {
+          console.error("Error updating task status:", error);
+        } else {
+          refreshTasks();
+        }
       }
       
       toast.success("Work timer started!");
@@ -112,7 +123,7 @@ const MyTasks = () => {
       if (taskError) throw taskError;
 
       // Update assignment completion status
-      await supabase
+      const { error: assignError } = await supabase
         .from("task_assignments")
         .update({ 
           is_completed: true,
@@ -120,6 +131,10 @@ const MyTasks = () => {
         })
         .eq("task_id", taskId)
         .eq("profile_id", profile.id);
+
+      if (assignError) {
+        console.error("Assignment update error:", assignError);
+      }
 
       // For "everyone" tasks, mark all other assignments as completed too
       const task = tasks.find(t => t.id === taskId);
@@ -188,6 +203,15 @@ const MyTasks = () => {
     fileInputRef.current?.click();
   };
 
+  // Get total time for a task (accumulated + current session if active)
+  const getTaskTotalTime = (taskId: string): string | null => {
+    const accumulatedMinutes = getAccumulatedMinutesForTask(taskId);
+    if (accumulatedMinutes === 0 && activeSession?.task_id !== taskId) {
+      return null;
+    }
+    return formatDuration(accumulatedMinutes);
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -232,6 +256,7 @@ const MyTasks = () => {
             {tasks.map((task) => {
               const isOverdue = new Date(task.due_date) < new Date() && task.status !== "completed";
               const isActiveTask = activeSession?.task_id === task.id;
+              const taskTotalTime = getTaskTotalTime(task.id);
               
               return (
                 <Card key={task.id} className="bg-gradient-card border-border/50 p-6">
@@ -255,15 +280,22 @@ const MyTasks = () => {
                         {task.assignment_type === "everyone" && (
                           <Badge variant="outline" className="text-xs">Open to Everyone</Badge>
                         )}
+                        {/* Show accumulated time for task */}
+                        {taskTotalTime && !isActiveTask && (
+                          <Badge variant="outline" className="text-xs">
+                            Time: {taskTotalTime}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <Badge className={getStatusColor(task.status || "assigned", task.due_date)}>
                         {isOverdue && task.status !== "completed" ? "Overdue" : (task.status || "assigned").replace("_", " ")}
                       </Badge>
+                      {/* Show running timer for active task */}
                       {isActiveTask && (
-                        <div className="text-lg font-mono text-primary">
-                          {formatTime(elapsedTime)}
+                        <div className="text-lg font-mono text-primary font-bold">
+                          {formatTime(elapsedSeconds)}
                         </div>
                       )}
                     </div>
@@ -284,7 +316,7 @@ const MyTasks = () => {
                           ) : (
                             <Play className="mr-2 h-4 w-4" />
                           )}
-                          Start Work
+                          {getAccumulatedMinutesForTask(task.id) > 0 ? "Resume Work" : "Start Work"}
                         </Button>
                       ) : (
                         <Button 
