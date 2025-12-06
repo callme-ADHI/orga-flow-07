@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, ClipboardList, Bell, Settings, UserPlus, BarChart3, FolderKanban, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, ClipboardList, Bell, Settings, UserPlus, BarChart3, FolderKanban, LogOut, FileText, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -19,6 +19,8 @@ export function Sidebar() {
     { to: "/employees", icon: Users, label: "Employees" },
     { to: "/all-tasks", icon: ClipboardList, label: "All Tasks" },
     { to: "/groups", icon: FolderKanban, label: "Groups" },
+    { to: "/documents", icon: FileText, label: "Documents" },
+    { to: "/complaints", icon: AlertTriangle, label: "Complaints" },
     { to: "/analytics", icon: BarChart3, label: "Analytics" },
     { to: "/notifications", icon: Bell, label: "Notifications", badge: unreadCount },
     { to: "/settings", icon: Settings, label: "Settings" },
@@ -31,6 +33,8 @@ export function Sidebar() {
     { to: "/groups", icon: FolderKanban, label: "Groups" },
     { to: "/employees", icon: Users, label: "Employees" },
     { to: "/all-tasks", icon: ClipboardList, label: "All Tasks" },
+    { to: "/documents", icon: FileText, label: "Documents" },
+    { to: "/complaints", icon: AlertTriangle, label: "Complaints" },
     { to: "/analytics", icon: BarChart3, label: "Analytics" },
     { to: "/notifications", icon: Bell, label: "Notifications", badge: unreadCount },
     { to: "/settings", icon: Settings, label: "Settings" },
@@ -40,6 +44,7 @@ export function Sidebar() {
     { to: "/employee-dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/my-tasks", icon: ClipboardList, label: "My Tasks" },
     { to: "/my-groups", icon: FolderKanban, label: "My Groups" },
+    { to: "/complaints", icon: AlertTriangle, label: "Complaints" },
     { to: "/performance", icon: BarChart3, label: "Performance" },
     { to: "/notifications", icon: Bell, label: "Notifications", badge: unreadCount },
     { to: "/settings", icon: Settings, label: "Settings" },
