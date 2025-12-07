@@ -25,6 +25,8 @@ import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
 import Documents from "./pages/Documents";
 import Complaints from "./pages/Complaints";
+import Chat from "./pages/Chat";
+import BannedUsers from "./pages/BannedUsers";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -134,6 +136,22 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Complaints />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chat"
+              element={
+                <ProtectedRoute>
+                  <Chat />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/banned-users"
+              element={
+                <ProtectedRoute allowedRoles={["CEO"]}>
+                  <BannedUsers />
                 </ProtectedRoute>
               }
             />
