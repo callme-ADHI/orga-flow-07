@@ -1,6 +1,7 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -9,8 +10,30 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { user, profile, loading } = useAuth();
+  const [isBanned, setIsBanned] = useState<boolean | null>(null);
+  const [checkingBan, setCheckingBan] = useState(true);
 
-  if (loading) {
+  useEffect(() => {
+    const checkBanStatus = async () => {
+      if (!user) {
+        setCheckingBan(false);
+        return;
+      }
+
+      const { data } = await supabase
+        .from("banned_users")
+        .select("id")
+        .eq("user_id", user.id)
+        .limit(1);
+
+      setIsBanned(data && data.length > 0);
+      setCheckingBan(false);
+    };
+
+    checkBanStatus();
+  }, [user]);
+
+  if (loading || checkingBan) {
     return (
       <div className="min-h-screen bg-gradient-dark flex items-center justify-center">
         <div className="text-center">
@@ -25,12 +48,15 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/auth" replace />;
   }
 
+  if (isBanned) {
+    return <Navigate to="/banned" replace />;
+  }
+
   if (!profile?.approved) {
     return <Navigate to="/pending-approval" replace />;
   }
 
   if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
-    // Redirect to appropriate dashboard based on role
     const dashboardPath = 
       profile.role === "CEO" ? "/ceo-dashboard" :
       profile.role === "Manager" ? "/manager-dashboard" :

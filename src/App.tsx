@@ -27,6 +27,7 @@ import Documents from "./pages/Documents";
 import Complaints from "./pages/Complaints";
 import Chat from "./pages/Chat";
 import BannedUsers from "./pages/BannedUsers";
+import Banned from "./pages/Banned";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/complete-profile" element={<CompleteProfile />} />
             <Route path="/pending-approval" element={<PendingApproval />} />
+            <Route path="/banned" element={<Banned />} />
             
             {/* CEO Routes */}
             <Route

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,26 +15,66 @@ export default function Auth() {
   const { toast } = useToast();
   const [isLogin, setIsLogin] = useState(true);
   const [formLoading, setFormLoading] = useState(false);
+  const [checkingBan, setCheckingBan] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || checkingBan) return;
     
-    if (user && profile?.approved) {
-      const dashboardPath = 
-        profile.role === "CEO" ? "/ceo-dashboard" :
-        profile.role === "Manager" ? "/manager-dashboard" :
-        "/employee-dashboard";
-      navigate(dashboardPath);
-    } else if (user && profile && !profile.approved) {
-      navigate("/pending-approval");
-    } else if (user && !profile) {
-      navigate("/complete-profile");
-    }
-  }, [user, profile, loading, navigate]);
+    const checkBanStatus = async () => {
+      if (user && profile?.org_id) {
+        setCheckingBan(true);
+        // Check if user is banned from their organization
+        const { data: banData } = await supabase
+          .from("banned_users")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("org_id", profile.org_id)
+          .maybeSingle();
+
+        setCheckingBan(false);
+        
+        if (banData) {
+          navigate("/banned");
+          return;
+        }
+      }
+
+      // Also check if user is banned from any org they were previously in
+      if (user && !profile?.org_id) {
+        setCheckingBan(true);
+        const { data: banData } = await supabase
+          .from("banned_users")
+          .select("id")
+          .eq("user_id", user.id)
+          .limit(1);
+
+        setCheckingBan(false);
+
+        if (banData && banData.length > 0) {
+          navigate("/banned");
+          return;
+        }
+      }
+
+      if (user && profile?.approved) {
+        const dashboardPath = 
+          profile.role === "CEO" ? "/ceo-dashboard" :
+          profile.role === "Manager" ? "/manager-dashboard" :
+          "/employee-dashboard";
+        navigate(dashboardPath);
+      } else if (user && profile && !profile.approved) {
+        navigate("/pending-approval");
+      } else if (user && !profile) {
+        navigate("/complete-profile");
+      }
+    };
+
+    checkBanStatus();
+  }, [user, profile, loading, checkingBan, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
