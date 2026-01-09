@@ -1,0 +1,1119 @@
+================================================================================
+                              ORGA PLATFORM
+                    COMPLETE PROJECT DOCUMENTATION
+================================================================================
+
+Last Updated: January 2026
+Version: 1.0.0
+
+================================================================================
+                              TABLE OF CONTENTS
+================================================================================
+
+1.  OVERVIEW
+2.  TECHNOLOGY STACK
+3.  ARCHITECTURE
+4.  USER ROLES & PERMISSIONS
+5.  DATABASE SCHEMA
+6.  APPLICATION PAGES
+7.  CORE FEATURES
+8.  DATA STRUCTURES & ALGORITHMS
+9.  SECURITY IMPLEMENTATION
+10. FILE STRUCTURE
+11. API INTEGRATION
+12. REAL-TIME FEATURES
+13. DEPLOYMENT
+
+================================================================================
+                              1. OVERVIEW
+================================================================================
+
+ORGA is a full-stack organizational workflow and task management platform 
+designed for hierarchical organizations. It provides intelligent task 
+delegation, group management, performance tracking, and real-time 
+communication capabilities.
+
+KEY FEATURES:
+- Hierarchical role-based access control (CEO, Manager, Employee)
+- Smart task assignment with multiple assignment types
+- Group management with rank-based organization
+- Real-time notifications and chat
+- Work session tracking and time logging
+- Anonymous complaint system
+- Comprehensive analytics dashboard
+- Document management center
+
+================================================================================
+                          2. TECHNOLOGY STACK
+================================================================================
+
+FRONTEND:
+---------
+• React 18.3.1           - Core UI library
+• Vite                   - Build tool and dev server
+• TypeScript             - Type-safe JavaScript
+• TailwindCSS            - Utility-first CSS framework
+• Shadcn/UI              - Component library (Radix primitives)
+• React Router v6        - Client-side routing
+• React Query            - Server state management
+• Recharts               - Data visualization charts
+• Lucide React           - Icon library
+• Framer Motion (via Sonner) - Toast animations
+
+BACKEND (Lovable Cloud / Supabase):
+----------------------------------
+• PostgreSQL             - Primary database
+• Supabase Auth          - Authentication service
+• Supabase Storage       - File storage (resumes, task files)
+• Supabase Realtime      - Real-time subscriptions
+• Edge Functions         - Serverless backend functions
+• Row Level Security     - Database access control
+
+STATE MANAGEMENT:
+-----------------
+• React Context API      - Authentication state
+• React Query            - Server state caching
+• Local State (useState) - Component-level state
+
+================================================================================
+                            3. ARCHITECTURE
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              CLIENT (Browser)                                │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                         React Application                               │ │
+│  │  ┌─────────────┐  ┌──────────────┐  ┌─────────────────────────────────┐│ │
+│  │  │   Pages     │  │  Components  │  │         Hooks                   ││ │
+│  │  │             │  │              │  │  - useAuth                      ││ │
+│  │  │ - Dashboard │  │ - UI         │  │  - useOrgData                   ││ │
+│  │  │ - Tasks     │  │ - Layout     │  │  - useNotifications             ││ │
+│  │  │ - Groups    │  │ - Forms      │  │  - useWorkSessions              ││ │
+│  │  │ - Analytics │  │              │  │  - useChat                      ││ │
+│  │  └─────────────┘  └──────────────┘  └─────────────────────────────────┘│ │
+│  │                                                                         │ │
+│  │  ┌─────────────────────────────────────────────────────────────────┐   │ │
+│  │  │                     Context Providers                            │   │ │
+│  │  │  AuthProvider  │  QueryClientProvider  │  TooltipProvider       │   │ │
+│  │  └─────────────────────────────────────────────────────────────────┘   │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          SUPABASE BACKEND                                    │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐              │
+│  │   PostgreSQL    │  │    Storage      │  │   Realtime      │              │
+│  │                 │  │                 │  │                 │              │
+│  │  - Tables       │  │  - resumes      │  │  - Notifications│              │
+│  │  - RLS Policies │  │  - task-files   │  │  - Messages     │              │
+│  │  - Functions    │  │                 │  │                 │              │
+│  │  - Triggers     │  │                 │  │                 │              │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘              │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                        Edge Functions                                │    │
+│  │  - task-reminders (hourly cron job for due date notifications)      │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+ROUTING ARCHITECTURE:
+--------------------
+
+/                          → Index (Landing Page)
+/auth                      → Authentication (Login/Signup)
+/complete-profile          → Profile Setup
+/pending-approval          → Awaiting Approval Screen
+/banned                    → Banned User Screen
+
+PROTECTED ROUTES (CEO only):
+/ceo-dashboard             → CEO Dashboard
+/banned-users              → Banned Users Management
+
+PROTECTED ROUTES (CEO & Manager):
+/manager-dashboard         → Manager Dashboard
+/pending-approvals         → User Approval Management
+/employees                 → Employee Directory
+/all-tasks                 → Task Management
+/create-task               → Task Creation
+/groups                    → Group Management
+/analytics                 → Analytics Dashboard
+/documents                 → Document Center
+
+PROTECTED ROUTES (Employee only):
+/employee-dashboard        → Employee Dashboard
+/my-tasks                  → Personal Task List
+/my-groups                 → Group Membership
+/performance               → Performance Metrics
+
+PROTECTED ROUTES (All authenticated):
+/notifications             → Notification Center
+/settings                  → User Settings
+/complaints                → Complaints System
+/chat                      → Messaging System
+
+================================================================================
+                        4. USER ROLES & PERMISSIONS
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              CEO (Chief Executive Officer)                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ • Creates organization                                                       │
+│ • Auto-approved (no waiting period)                                         │
+│ • Full access to all features                                               │
+│ • Can approve/reject all users (Managers and Employees)                     │
+│ • Can create, assign, and manage all tasks                                  │
+│ • Can create and manage groups                                              │
+│ • Can ban/unban users                                                       │
+│ • Can view all complaints with submitter identity                           │
+│ • Access to full analytics                                                  │
+│ • Can view all documents including resumes                                  │
+│ • Can participate in all chats                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                 MANAGER                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ • Joins existing organization (requires approval)                           │
+│ • Can approve/reject employee requests                                      │
+│ • Can create and assign tasks                                               │
+│ • Can create and manage groups                                              │
+│ • Can view all tasks and employees                                          │
+│ • Can resolve complaints (submitter is anonymous)                           │
+│ • Access to analytics dashboard                                             │
+│ • Can view documents                                                        │
+│ • Can participate in chats and create conversations                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                 EMPLOYEE                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ • Joins existing organization (requires approval)                           │
+│ • Can view and complete assigned tasks                                      │
+│ • Can track work sessions (start/pause timers)                              │
+│ • Can upload task-related documents                                         │
+│ • Can view personal performance metrics                                     │
+│ • Can submit complaints (anonymous to managers)                             │
+│ • Can chat with managers and group members                                  │
+│ • Can view groups they belong to                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+                           5. DATABASE SCHEMA
+================================================================================
+
+TABLE: organizations
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ Unique identifier
+org_name        │ TEXT                      │ No       │ Organization name
+org_password    │ TEXT                      │ No       │ Password for joining
+description     │ TEXT                      │ Yes      │ Organization description
+created_by      │ UUID                      │ Yes      │ User ID of creator
+created_at      │ TIMESTAMPTZ               │ Yes      │ Creation timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: profiles
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ Profile identifier
+user_id         │ UUID                      │ No       │ Auth user reference
+org_id          │ UUID (FK)                 │ Yes      │ Organization reference
+name            │ TEXT                      │ No       │ Full name
+email           │ TEXT                      │ No       │ Email address
+role            │ TEXT                      │ No       │ CEO/Manager/Employee
+rank            │ TEXT                      │ Yes      │ Employee rank (S,A,B,C,D,E)
+custom_id       │ TEXT                      │ Yes      │ Generated ID (CEO001, MNR00001)
+approved        │ BOOLEAN                   │ Yes      │ Approval status (default: false)
+resume_url      │ TEXT                      │ Yes      │ Uploaded resume URL
+created_at      │ TIMESTAMPTZ               │ Yes      │ Creation timestamp
+updated_at      │ TIMESTAMPTZ               │ Yes      │ Last update timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: groups
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ Group identifier
+org_id          │ UUID (FK)                 │ No       │ Organization reference
+group_name      │ TEXT                      │ No       │ Name of the group
+group_rank      │ TEXT                      │ Yes      │ Group rank (S,A,B,C,D,E)
+leader_id       │ UUID (FK)                 │ Yes      │ Group leader profile
+created_by      │ UUID (FK)                 │ Yes      │ Creator profile
+created_at      │ TIMESTAMPTZ               │ Yes      │ Creation timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: group_members
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ Membership identifier
+group_id        │ UUID (FK)                 │ No       │ Group reference
+profile_id      │ UUID (FK)                 │ No       │ Member profile
+joined_at       │ TIMESTAMPTZ               │ Yes      │ Join timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: tasks
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ Task identifier
+org_id          │ UUID (FK)                 │ No       │ Organization reference
+title           │ TEXT                      │ No       │ Task title
+description     │ TEXT                      │ Yes      │ Task description
+priority        │ INTEGER                   │ Yes      │ 1=High, 2=Medium, 3=Low
+status          │ TEXT                      │ Yes      │ assigned/in_progress/completed
+assignment_type │ TEXT                      │ No       │ individual/group/rank/everyone
+assigned_rank   │ TEXT                      │ Yes      │ Target rank for rank assignment
+assigned_by     │ UUID (FK)                 │ No       │ Assigner profile
+due_date        │ TIMESTAMPTZ               │ No       │ Due date
+completed_at    │ TIMESTAMPTZ               │ Yes      │ Completion timestamp
+overdue_flag    │ BOOLEAN                   │ Yes      │ Overdue indicator
+created_at      │ TIMESTAMPTZ               │ Yes      │ Creation timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: task_assignments
+─────────────────────────────────────────────────────────────────────────────
+Column               │ Type                 │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id                   │ UUID (PK)            │ No       │ Assignment identifier
+task_id              │ UUID (FK)            │ No       │ Task reference
+profile_id           │ UUID (FK)            │ Yes      │ Assigned user profile
+group_id             │ UUID (FK)            │ Yes      │ Assigned group
+is_completed         │ BOOLEAN              │ Yes      │ Completion status
+completed_by_profile_id │ UUID (FK)         │ Yes      │ Who completed the task
+assigned_at          │ TIMESTAMPTZ          │ Yes      │ Assignment timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: task_files
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ File identifier
+task_id         │ UUID (FK)                 │ No       │ Task reference
+profile_id      │ UUID (FK)                 │ No       │ Uploader profile
+file_name       │ TEXT                      │ No       │ Original filename
+file_url        │ TEXT                      │ No       │ Storage URL
+uploaded_at     │ TIMESTAMPTZ               │ Yes      │ Upload timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: work_sessions
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ Session identifier
+task_id         │ UUID (FK)                 │ No       │ Task reference
+profile_id      │ UUID (FK)                 │ No       │ Worker profile
+started_at      │ TIMESTAMPTZ               │ No       │ Session start time
+ended_at        │ TIMESTAMPTZ               │ Yes      │ Session end time
+duration_minutes│ INTEGER                   │ Yes      │ Calculated duration
+is_active       │ BOOLEAN                   │ Yes      │ Currently active flag
+created_at      │ TIMESTAMPTZ               │ No       │ Record creation time
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: notifications
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ Notification identifier
+profile_id      │ UUID (FK)                 │ No       │ Recipient profile
+title           │ TEXT                      │ No       │ Notification title
+message         │ TEXT                      │ No       │ Notification message
+type            │ TEXT                      │ No       │ Notification type
+read            │ BOOLEAN                   │ Yes      │ Read status
+created_at      │ TIMESTAMPTZ               │ Yes      │ Creation timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: complaints
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ Complaint identifier
+org_id          │ UUID (FK)                 │ No       │ Organization reference
+submitted_by    │ UUID (FK)                 │ No       │ Submitter profile
+subject         │ TEXT                      │ No       │ Complaint subject
+description     │ TEXT                      │ No       │ Complaint details
+status          │ TEXT                      │ Yes      │ pending/resolved
+resolved_by     │ UUID (FK)                 │ Yes      │ Resolver profile
+resolved_at     │ TIMESTAMPTZ               │ Yes      │ Resolution timestamp
+created_at      │ TIMESTAMPTZ               │ No       │ Submission timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: conversations
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ Conversation identifier
+org_id          │ UUID (FK)                 │ No       │ Organization reference
+type            │ TEXT                      │ No       │ direct/group
+group_id        │ UUID (FK)                 │ Yes      │ Associated group (for group chats)
+created_at      │ TIMESTAMPTZ               │ No       │ Creation timestamp
+updated_at      │ TIMESTAMPTZ               │ No       │ Last activity timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: conversation_participants
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ Participant identifier
+conversation_id │ UUID (FK)                 │ No       │ Conversation reference
+profile_id      │ UUID (FK)                 │ No       │ Participant profile
+joined_at       │ TIMESTAMPTZ               │ No       │ Join timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: messages
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ Message identifier
+conversation_id │ UUID (FK)                 │ No       │ Conversation reference
+sender_id       │ UUID (FK)                 │ No       │ Sender profile
+content         │ TEXT                      │ No       │ Message content
+read_by         │ UUID[]                    │ Yes      │ Array of reader IDs
+created_at      │ TIMESTAMPTZ               │ No       │ Send timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: banned_users
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ Ban record identifier
+user_id         │ UUID                      │ No       │ Banned user auth ID
+org_id          │ UUID (FK)                 │ No       │ Organization reference
+banned_by       │ UUID (FK)                 │ No       │ Who banned (CEO)
+reason          │ TEXT                      │ Yes      │ Ban reason
+banned_at       │ TIMESTAMPTZ               │ No       │ Ban timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+TABLE: black_marks
+─────────────────────────────────────────────────────────────────────────────
+Column          │ Type                      │ Nullable │ Description
+─────────────────────────────────────────────────────────────────────────────
+id              │ UUID (PK)                 │ No       │ Black mark identifier
+profile_id      │ UUID (FK)                 │ No       │ Employee profile
+task_id         │ UUID (FK)                 │ No       │ Related task
+reason          │ TEXT                      │ No       │ Reason for black mark
+created_at      │ TIMESTAMPTZ               │ Yes      │ Creation timestamp
+─────────────────────────────────────────────────────────────────────────────
+
+
+DATABASE FUNCTIONS:
+-------------------
+
+1. auto_approve_ceo()
+   - Trigger function that automatically sets approved=true for CEO role
+   - Fires on INSERT to profiles table
+
+2. check_same_org(check_org_id UUID)
+   - Security definer function for RLS policies
+   - Checks if current user belongs to specified organization
+   - Prevents infinite recursion in RLS
+
+3. generate_custom_id(role_type TEXT, org_uuid UUID)
+   - Generates formatted IDs: CEO001, MNR00001, EMP00001
+   - Called when approving users
+
+4. update_updated_at_column()
+   - Trigger function to update updated_at timestamp
+
+
+STORAGE BUCKETS:
+----------------
+
+1. resumes (Public)
+   - Stores user resume PDFs
+   - Max file size: 10MB
+   - Used during profile completion
+
+2. task-files (Private)
+   - Stores task-related documents
+   - Only accessible by organization members
+   - Used for task progress uploads
+
+
+================================================================================
+                          6. APPLICATION PAGES
+================================================================================
+
+PUBLIC PAGES:
+─────────────────────────────────────────────────────────────────────────────
+
+Index (/):
+• Landing page with hero section
+• Features showcase
+• Get Started CTA
+• Auto-redirects authenticated users to their dashboard
+
+Auth (/auth):
+• Login/Signup toggle
+• Email and password authentication
+• Ban status checking
+• Redirects based on profile state
+
+CompleteProfile (/complete-profile):
+• Role selection (CEO/Manager/Employee)
+• Organization creation (CEO) or joining (Manager/Employee)
+• Resume upload capability
+• Rank assignment
+
+PendingApproval (/pending-approval):
+• Waiting screen for unapproved users
+• Displays approval status message
+
+Banned (/banned):
+• Displays ban notification
+• Shows reason if provided
+
+─────────────────────────────────────────────────────────────────────────────
+
+CEO DASHBOARD (/ceo-dashboard):
+• Organization info with share functionality
+• Key metrics cards (employees, tasks, approvals, completion rate)
+• Pending approvals preview
+• Quick action buttons
+
+Manager Dashboard (/manager-dashboard):
+• Performance metrics overview
+• Task statistics
+• Team information
+• Quick actions for task management
+
+Employee Dashboard (/employee-dashboard):
+• Personal task summary
+• Active/completed/overdue counts
+• Group membership info
+• Recent tasks list
+
+─────────────────────────────────────────────────────────────────────────────
+
+TASK MANAGEMENT PAGES:
+─────────────────────────────────────────────────────────────────────────────
+
+AllTasks (/all-tasks) - CEO & Manager:
+• Full task list with tabs (All/Assigned/In Progress/Completed)
+• Task cards with status, priority, assignee
+• Create task navigation
+
+CreateTask (/create-task) - CEO & Manager:
+• Task form with title, description
+• Priority selection (High/Medium/Low)
+• Due date picker
+• Assignment type selector:
+  - Individual: Single employee
+  - Group: Entire group
+  - Rank: All employees of specific rank
+  - Everyone: All employees (first to complete wins)
+
+MyTasks (/my-tasks) - Employee:
+• Personal task list
+• Work session controls (Start/Pause)
+• Time tracking display
+• Document upload per task
+• Mark complete functionality
+
+─────────────────────────────────────────────────────────────────────────────
+
+GROUP MANAGEMENT PAGES:
+─────────────────────────────────────────────────────────────────────────────
+
+Groups (/groups) - CEO & Manager:
+• Group cards with member counts
+• Create group dialog
+• Edit group functionality
+• Add/remove members
+• View member list
+
+MyGroups (/my-groups) - Employee:
+• Groups user belongs to
+• Leader information
+• Member counts
+
+─────────────────────────────────────────────────────────────────────────────
+
+USER MANAGEMENT PAGES:
+─────────────────────────────────────────────────────────────────────────────
+
+Employees (/employees) - CEO & Manager:
+• Employee directory with search
+• Role and rank filters
+• Rank editing dialog
+• Employee cards with details
+
+PendingApprovals (/pending-approvals) - CEO & Manager:
+• Pending user requests
+• Role and rank assignment
+• Approve/reject actions
+• Resume viewing
+
+BannedUsers (/banned-users) - CEO only:
+• List of banned users
+• Ban user dialog
+• Unban functionality
+• Ban reason display
+
+─────────────────────────────────────────────────────────────────────────────
+
+ANALYTICS & PERFORMANCE:
+─────────────────────────────────────────────────────────────────────────────
+
+Analytics (/analytics) - CEO & Manager:
+• Key metrics cards
+• Task status pie chart
+• Priority distribution bar chart
+• Task trend area chart
+• Team composition chart
+• Summary statistics
+
+Performance (/performance) - Employee:
+• Personal metrics
+• Completion rate progress bar
+• Task statistics
+• Rank display
+
+─────────────────────────────────────────────────────────────────────────────
+
+COMMUNICATION PAGES:
+─────────────────────────────────────────────────────────────────────────────
+
+Chat (/chat) - All authenticated:
+• Conversation list sidebar
+• Real-time messaging
+• New chat dialog (Direct/Group)
+• Message timestamps
+• Sender identification
+
+Notifications (/notifications) - All authenticated:
+• Notification list
+• Read/unread status
+• Mark all as read
+• Notification type icons
+
+Complaints (/complaints) - All authenticated:
+• Submit complaint form
+• Complaint list
+• Status badges (Pending/Resolved)
+• Anonymous to managers, visible to CEO
+• Resolve action for CEO/Manager
+
+─────────────────────────────────────────────────────────────────────────────
+
+OTHER PAGES:
+─────────────────────────────────────────────────────────────────────────────
+
+Documents (/documents) - CEO & Manager:
+• Document tabs (All/Resumes/Task Files/Complaints)
+• Search functionality
+• Document cards with download links
+• Type badges
+
+Settings (/settings) - All authenticated:
+• Profile settings (name, rank)
+• Notification preferences (toggles)
+• Security settings (password change)
+
+NotFound (/*)
+• 404 error page
+• Navigation back to home
+
+================================================================================
+                           7. CORE FEATURES
+================================================================================
+
+AUTHENTICATION SYSTEM:
+─────────────────────────────────────────────────────────────────────────────
+• Email/password authentication via Supabase Auth
+• Auto-confirm enabled (no email verification required)
+• Session persistence with automatic refresh
+• Role-based route protection
+• Ban status checking on login
+• Profile completion flow after signup
+
+TASK MANAGEMENT:
+─────────────────────────────────────────────────────────────────────────────
+• Four assignment types:
+  1. Individual - Single employee assignment
+  2. Group - All group members receive task
+  3. Rank - All employees with specific rank
+  4. Everyone - First to complete wins
+
+• Priority levels: High (1), Medium (2), Low (3)
+• Status tracking: Assigned → In Progress → Completed
+• Due date with overdue detection
+• Automatic notifications on assignment
+
+WORK SESSION TRACKING:
+─────────────────────────────────────────────────────────────────────────────
+• Start/pause work timers per task
+• Duration calculation in minutes
+• Accumulated time across sessions
+• Real-time elapsed time display
+• Active session tracking
+
+GROUP MANAGEMENT:
+─────────────────────────────────────────────────────────────────────────────
+• Group creation with name and rank
+• Leader assignment
+• Member management (add/remove)
+• Multi-group membership support
+• Group-based task assignment
+
+NOTIFICATION SYSTEM:
+─────────────────────────────────────────────────────────────────────────────
+• Real-time push via Supabase Realtime
+• Types: task_assigned, task_completed, approval_status, etc.
+• Read/unread status
+• Mark all as read functionality
+• Badge count in navigation
+• Task due date reminders (24h and 1h before)
+
+COMPLAINT SYSTEM:
+─────────────────────────────────────────────────────────────────────────────
+• Anonymous submission (identity hidden from managers)
+• CEO can see submitter identity
+• Status tracking (pending/resolved)
+• Resolution logging with resolver info
+
+DOCUMENT CENTER:
+─────────────────────────────────────────────────────────────────────────────
+• Resume storage during onboarding
+• Task file uploads
+• Categorized viewing (tabs)
+• Download functionality
+• Search across documents
+
+CHAT SYSTEM:
+─────────────────────────────────────────────────────────────────────────────
+• Direct messages between users
+• Group conversations (linked to groups)
+• Real-time message delivery
+• Role-based sending permissions:
+  - CEO/Manager: Can message anyone
+  - Employee: Can message managers and group members
+
+================================================================================
+                    8. DATA STRUCTURES & ALGORITHMS
+================================================================================
+
+The ORGA platform implements several custom data structures in JavaScript
+for optimized operations:
+
+MIN HEAP (src/lib/dsa/MinHeap.js):
+─────────────────────────────────────────────────────────────────────────────
+Purpose: Balanced task assignment to least-busy employees
+Operations:
+  - insert(value): O(log n) - Add new element
+  - extractMin(): O(log n) - Remove smallest element
+  - peek(): O(1) - View smallest without removal
+Use Case: When assigning tasks by workload, quickly find employee with 
+          fewest active tasks
+
+PRIORITY QUEUE (src/lib/dsa/Queue.js):
+─────────────────────────────────────────────────────────────────────────────
+Purpose: Processing notifications and approvals by priority
+Operations:
+  - enqueue(item, priority): O(n) - Add with priority
+  - dequeue(): O(1) - Remove highest priority
+  - peek(): O(1) - View highest priority
+Use Case: Process high-priority notifications before low-priority
+
+LINKED LIST (src/lib/dsa/LinkedList.js):
+─────────────────────────────────────────────────────────────────────────────
+Purpose: Employee task history and activity timeline
+Operations:
+  - append(value): O(1) - Add to end
+  - prepend(value): O(1) - Add to beginning
+  - delete(value): O(n) - Remove by value
+  - find(value): O(n) - Search for value
+Use Case: Maintain chronological activity log
+
+TREE (src/lib/dsa/Tree.js):
+─────────────────────────────────────────────────────────────────────────────
+Purpose: Organization hierarchy visualization
+Structure: CEO as root, Managers as children, Employees as leaves
+Operations:
+  - addChild(parentId, node): Add node under parent
+  - findNode(id): Locate node by ID
+  - traverse(): Visit all nodes
+Use Case: Display organizational structure, determine reporting chains
+
+GRAPH (src/lib/dsa/Graph.js):
+─────────────────────────────────────────────────────────────────────────────
+Purpose: Group-member relationships, multi-group membership
+Implementation: Adjacency list
+Operations:
+  - addVertex(v): Add node
+  - addEdge(v1, v2): Connect nodes
+  - getNeighbors(v): Get connected nodes
+  - bfs(start): Breadth-first traversal
+Use Case: Find all groups a member belongs to, find all members in a group
+
+HASH MAP (src/lib/dsa/HashMap.js):
+─────────────────────────────────────────────────────────────────────────────
+Purpose: Fast ID lookups for employees, tasks, groups
+Operations:
+  - set(key, value): O(1) average
+  - get(key): O(1) average
+  - delete(key): O(1) average
+  - has(key): O(1) average
+Use Case: Quick employee lookup by ID, task caching
+
+================================================================================
+                       9. SECURITY IMPLEMENTATION
+================================================================================
+
+ROW LEVEL SECURITY (RLS):
+─────────────────────────────────────────────────────────────────────────────
+
+All tables have RLS enabled with carefully designed policies:
+
+profiles:
+  - Users can view own profile OR profiles in same org (via check_same_org)
+  - Users can update own profile
+  - CEO/Manager can update profiles in their org
+  - Users can insert own profile only
+
+tasks:
+  - Viewable by all org members
+  - Only CEO/Manager can create
+  - Assignees and CEO/Manager can update
+
+task_assignments:
+  - Viewable by org members
+  - Only CEO/Manager can create
+  - Assigned users can update completion status
+
+groups/group_members:
+  - Viewable by org members
+  - Only CEO/Manager can create, update, delete
+
+notifications:
+  - Users can only view/update their own
+  - System can create (open INSERT)
+
+complaints:
+  - Users can submit for their org
+  - CEO and Manager can view all in org
+  - Employees can only view their own
+
+banned_users:
+  - Only CEO can view, insert, delete
+
+messages/conversations:
+  - Role-based access for viewing and sending
+  - Employees limited to group and manager conversations
+
+SECURITY DEFINER FUNCTIONS:
+─────────────────────────────────────────────────────────────────────────────
+check_same_org(): Prevents infinite recursion in RLS by using SECURITY DEFINER
+                  to bypass RLS while checking organization membership
+
+STORAGE POLICIES:
+─────────────────────────────────────────────────────────────────────────────
+resumes bucket:
+  - Public read access
+  - Authenticated users can upload to their own folder
+
+task-files bucket:
+  - Private (no public access)
+  - Organization members can view
+  - Users can upload to their tasks
+
+================================================================================
+                           10. FILE STRUCTURE
+================================================================================
+
+orga/
+├── public/
+│   ├── favicon.ico
+│   ├── placeholder.svg
+│   └── robots.txt
+│
+├── src/
+│   ├── assets/
+│   │   └── orga-logo.png
+│   │
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── DashboardLayout.tsx    # Main dashboard wrapper
+│   │   │   ├── Sidebar.tsx            # Desktop navigation sidebar
+│   │   │   └── MobileNav.tsx          # Mobile bottom navigation
+│   │   │
+│   │   ├── ui/                        # Shadcn/UI components
+│   │   │   ├── accordion.tsx
+│   │   │   ├── alert-dialog.tsx
+│   │   │   ├── alert.tsx
+│   │   │   ├── badge.tsx
+│   │   │   ├── button.tsx
+│   │   │   ├── card.tsx
+│   │   │   ├── checkbox.tsx
+│   │   │   ├── dialog.tsx
+│   │   │   ├── dropdown-menu.tsx
+│   │   │   ├── form.tsx
+│   │   │   ├── input.tsx
+│   │   │   ├── label.tsx
+│   │   │   ├── popover.tsx
+│   │   │   ├── progress.tsx
+│   │   │   ├── radio-group.tsx
+│   │   │   ├── scroll-area.tsx
+│   │   │   ├── select.tsx
+│   │   │   ├── separator.tsx
+│   │   │   ├── sheet.tsx
+│   │   │   ├── skeleton.tsx
+│   │   │   ├── switch.tsx
+│   │   │   ├── table.tsx
+│   │   │   ├── tabs.tsx
+│   │   │   ├── textarea.tsx
+│   │   │   ├── toast.tsx
+│   │   │   ├── toaster.tsx
+│   │   │   ├── tooltip.tsx
+│   │   │   └── use-toast.ts
+│   │   │
+│   │   └── ProtectedRoute.tsx         # Route guard component
+│   │
+│   ├── contexts/
+│   │   └── AuthContext.tsx            # Authentication context provider
+│   │
+│   ├── hooks/
+│   │   ├── use-mobile.tsx             # Mobile detection hook
+│   │   ├── use-toast.ts               # Toast notification hook
+│   │   ├── useChat.ts                 # Chat & banned users hooks
+│   │   ├── useNotifications.ts        # Notifications hook
+│   │   ├── useOrgData.ts              # Organization data hooks
+│   │   └── useWorkSessions.ts         # Work session tracking hook
+│   │
+│   ├── integrations/
+│   │   └── supabase/
+│   │       ├── client.ts              # Supabase client (auto-generated)
+│   │       └── types.ts               # Database types (auto-generated)
+│   │
+│   ├── lib/
+│   │   ├── dsa/                       # Data structures
+│   │   │   ├── Graph.js
+│   │   │   ├── HashMap.js
+│   │   │   ├── LinkedList.js
+│   │   │   ├── MinHeap.js
+│   │   │   ├── Queue.js
+│   │   │   └── Tree.js
+│   │   │
+│   │   └── utils.ts                   # Utility functions (cn)
+│   │
+│   ├── pages/
+│   │   ├── AllTasks.tsx               # Task list (CEO/Manager)
+│   │   ├── Analytics.tsx              # Analytics dashboard
+│   │   ├── Auth.tsx                   # Login/Signup
+│   │   ├── Banned.tsx                 # Banned user screen
+│   │   ├── BannedUsers.tsx            # Ban management (CEO)
+│   │   ├── CEODashboard.tsx           # CEO main dashboard
+│   │   ├── Chat.tsx                   # Messaging system
+│   │   ├── Complaints.tsx             # Complaint system
+│   │   ├── CompleteProfile.tsx        # Profile setup
+│   │   ├── CreateTask.tsx             # Task creation form
+│   │   ├── Documents.tsx              # Document center
+│   │   ├── EmployeeDashboard.tsx      # Employee main dashboard
+│   │   ├── Employees.tsx              # Employee directory
+│   │   ├── Groups.tsx                 # Group management
+│   │   ├── Index.tsx                  # Landing page
+│   │   ├── ManagerDashboard.tsx       # Manager main dashboard
+│   │   ├── MyGroups.tsx               # Employee's groups
+│   │   ├── MyTasks.tsx                # Employee's tasks
+│   │   ├── NotFound.tsx               # 404 page
+│   │   ├── Notifications.tsx          # Notification center
+│   │   ├── PendingApproval.tsx        # Waiting screen
+│   │   ├── PendingApprovals.tsx       # Approval management
+│   │   ├── Performance.tsx            # Employee performance
+│   │   └── Settings.tsx               # User settings
+│   │
+│   ├── App.css                        # Additional styles
+│   ├── App.tsx                        # Main app with routes
+│   ├── index.css                      # Tailwind & design tokens
+│   ├── main.tsx                       # React entry point
+│   └── vite-env.d.ts                  # Vite type declarations
+│
+├── supabase/
+│   ├── config.toml                    # Supabase configuration
+│   ├── functions/
+│   │   └── task-reminders/
+│   │       └── index.ts               # Due date reminder function
+│   └── migrations/                    # Database migrations
+│
+├── .env                               # Environment variables
+├── .gitignore                         # Git ignore rules
+├── components.json                    # Shadcn/UI config
+├── eslint.config.js                   # ESLint configuration
+├── index.html                         # HTML entry point
+├── package.json                       # Dependencies
+├── postcss.config.js                  # PostCSS configuration
+├── README.md                          # Project readme
+├── tailwind.config.ts                 # Tailwind configuration
+├── tsconfig.json                      # TypeScript configuration
+└── vite.config.ts                     # Vite configuration
+
+================================================================================
+                          11. API INTEGRATION
+================================================================================
+
+SUPABASE CLIENT USAGE:
+─────────────────────────────────────────────────────────────────────────────
+
+Import:
+  import { supabase } from "@/integrations/supabase/client";
+
+Authentication:
+  // Sign up
+  await supabase.auth.signUp({ email, password });
+  
+  // Sign in
+  await supabase.auth.signInWithPassword({ email, password });
+  
+  // Sign out
+  await supabase.auth.signOut();
+  
+  // Get current user
+  const { data: { user } } = await supabase.auth.getUser();
+
+Database Operations:
+  // SELECT
+  const { data, error } = await supabase
+    .from("table_name")
+    .select("*")
+    .eq("column", value);
+  
+  // INSERT
+  const { data, error } = await supabase
+    .from("table_name")
+    .insert({ column: value })
+    .select()
+    .single();
+  
+  // UPDATE
+  const { error } = await supabase
+    .from("table_name")
+    .update({ column: newValue })
+    .eq("id", id);
+  
+  // DELETE
+  const { error } = await supabase
+    .from("table_name")
+    .delete()
+    .eq("id", id);
+
+Storage:
+  // Upload
+  await supabase.storage
+    .from("bucket_name")
+    .upload(filePath, file);
+  
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from("bucket_name")
+    .getPublicUrl(filePath);
+
+EDGE FUNCTIONS:
+─────────────────────────────────────────────────────────────────────────────
+
+task-reminders:
+  - Runs hourly via pg_cron
+  - Checks tasks due within 24 hours
+  - Creates notifications for assignees
+  - Two reminder types: 24 hours and 1 hour before
+
+================================================================================
+                         12. REAL-TIME FEATURES
+================================================================================
+
+NOTIFICATIONS:
+─────────────────────────────────────────────────────────────────────────────
+
+The useNotifications hook subscribes to real-time notification inserts:
+
+  const channel = supabase
+    .channel('notifications-changes')
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `profile_id=eq.${profile.id}`
+      },
+      (payload) => {
+        // Add new notification to state
+      }
+    )
+    .subscribe();
+
+MESSAGES:
+─────────────────────────────────────────────────────────────────────────────
+
+The useChat hook subscribes to real-time message inserts for active 
+conversation:
+
+  const channel = supabase
+    .channel(`messages-${activeConversation.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `conversation_id=eq.${activeConversation.id}`
+      },
+      (payload) => {
+        // Add new message to state
+      }
+    )
+    .subscribe();
+
+================================================================================
+                            13. DEPLOYMENT
+================================================================================
+
+PRODUCTION BUILD:
+─────────────────────────────────────────────────────────────────────────────
+
+  npm run build
+
+This creates an optimized production build in the `dist/` directory.
+
+ENVIRONMENT VARIABLES:
+─────────────────────────────────────────────────────────────────────────────
+
+Required environment variables (auto-configured by Lovable Cloud):
+
+  VITE_SUPABASE_URL          - Supabase project URL
+  VITE_SUPABASE_PUBLISHABLE_KEY - Supabase anon key
+  VITE_SUPABASE_PROJECT_ID   - Supabase project ID
+
+EDGE FUNCTION DEPLOYMENT:
+─────────────────────────────────────────────────────────────────────────────
+
+Edge functions are automatically deployed when code is pushed.
+The task-reminders function runs on an hourly cron schedule.
+
+================================================================================
+                              END OF DOCUMENT
+================================================================================
+
+For questions or support, refer to the project's README.md or contact the
+development team.
+
+Document Version: 1.0.0
+Last Updated: January 2026
